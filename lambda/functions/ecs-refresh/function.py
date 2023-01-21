@@ -9,12 +9,12 @@ def lambda_handler(event: dict, context: object):
   bucket_name = _addEnvSuffix('ecs-refresh')
   deployment_config_name = 'CodeDeployDefault.ECSAllAtOnce'
   try:
-    deploy_app_names = os.environ['DEPLOY_APP_NAMES'] # ex. "app-A,app-B"
+    deploy_app_names = os.environ['DEPLOY_APP_NAMES']
     deploy_app_names_list = deploy_app_names.split(',')
     app_names_list_for_slack = []
     for deploy_app_name in deploy_app_names_list:
+      bucket_key = _makeS3BucketKey(deploy_app_name)
       app_names_list_for_slack.append(_addEnvSuffix(deploy_app_name))
-      bucket_key = _makeS3BucketKey(bucket_name)
       _createDeployment(_addEnvSuffix(deploy_app_name), bucket_name, bucket_key, deployment_config_name)
     app_names_list_for_slack_string = _convertListToStringForSlack("\n", app_names_list_for_slack)
     message=app_names_list_for_slack_string
@@ -74,7 +74,7 @@ def _createDeployment(deploy_app_name: str, bucket_name: str, bucket_key: str, d
       'revisionType': 'S3',
       's3Location': {
         'bucket': bucket_name,
-        'key': deploy_app_name + '/appspec.yaml',
+        'key': bucket_key,
         'bundleType': 'YAML'
       }
     },
