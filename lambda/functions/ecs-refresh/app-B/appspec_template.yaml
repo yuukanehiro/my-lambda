@@ -1,0 +1,9 @@
+version: 0.0
+Resources:
+  - TargetService:
+      Type: AWS::ECS::Service
+      Properties:
+        TaskDefinition: "arn:aws:ecs:SED_TARGET_AWS_REGION:SED_TARGET_AWS_ACCOUNT_ID:task-definition/app-B-SED_TARGET_ENVIRONMENT"
+        LoadBalancerInfo:
+          ContainerName: "app-B-nginx-SED_TARGET_ENVIRONMENT"
+          ContainerPort: "80"

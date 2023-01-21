@@ -1,0 +1,47 @@
+version: 0.2
+phases:
+  install:
+    commands:
+      # AWS CLIを実行する準備
+      - yum install -y epel-release
+      - yum install -y python-pip --enablerepo=epel
+      - yum install -y curl
+      - yum install -y jq
+      - yum install -y unzip
+      - pip install awscli
+  pre_build:
+    commands:
+      # AWS Cliを実行する為の設定をセット
+      - curl -qL -o aws_credentials.json 169.254.170.2$AWS_CONTAINER_CREDENTIALS_RELATIVE_URI > aws_credentials.json
+      - aws configure set region ap-northeast-1 --profile codebuild-"$ENVIRONMENT"
+      - aws configure set aws_access_key_id `jq -r '.AccessKeyId' aws_credentials.json`
+      - aws configure set aws_secret_access_key `jq -r '.SecretAccessKey' aws_credentials.json`
+      - aws configure set aws_session_token `jq -r '.Token' aws_credentials.json`
+  build:
+    commands:
+      - cd ./lambda/functions/
+      # デプロイ // .todo 共通処理化
+      - zip -rj ec2-manager-by-tag.zip ./ec2-manager-by-tag/
+      - aws lambda update-function-code --function-name ec2-manager-by-tag-"$ENVIRONMENT" --zip-file fileb://ec2-manager-by-tag.zip
+      - zip -rj rds-manager-by-tag.zip ./rds-manager-by-tag/
+      - aws lambda update-function-code --function-name rds-manager-by-tag-"$ENVIRONMENT" --zip-file fileb://rds-manager-by-tag.zip
+      - zip -rj check-domain-certs.zip ./check-domain-certs/
+      - aws lambda update-function-code --function-name check-domain-certs-"$ENVIRONMENT" --zip-file fileb://check-domain-certs.zip
+
+      - aws lambda update-function-code --function-name rds-manager-by-tag-"$ENVIRONMENT" --zip-file fileb://rds-manager-by-tag.zip
+      # ecs-refresh
+      ## app-A
+      - cat ./ecs-refresh/appspecs/app-A/appspec_template.yaml |
+        sed -e s@SED_TARGET_ENVIRONMENT@$ENVIRONMENT@g
+        -e s@SED_TARGET_AWS_ACCOUNT_ID@$AWS_ACCOUNT_ID@g
+        -e s@SED_TARGET_AWS_REGION@$AWS_REGION@g > ./ecs-refresh/appspecs/app-A/appspec.yaml
+      - aws s3 cp ./ecs-refresh/appspecs/app-A/appspec.yaml s3://ecs-refresh-"$ENVIRONMENT"/app-A/appspec.yaml
+      ## app-B
+      - cat ./ecs-refresh/appspecs/app-B/appspec_template.yaml |
+        sed -e s@SED_TARGET_ENVIRONMENT@$ENVIRONMENT@g
+        -e s@SED_TARGET_AWS_ACCOUNT_ID@$AWS_ACCOUNT_ID@g
+        -e s@SED_TARGET_AWS_REGION@$AWS_REGION@g > ./ecs-refresh/appspecs/app-B/appspec.yaml
+      - aws s3 cp ./ecs-refresh/appspecs/app-B/appspec.yaml s3://ecs-refresh-"$ENVIRONMENT"/app-B/appspec.yaml
+      ## deploy
+      - zip -rj ecs-refresh.zip ecs-refresh/function.py
+      - aws lambda update-function-code --function-name ecs-refresh-"$ENVIRONMENT" --zip-file fileb://ecs-refresh.zip
